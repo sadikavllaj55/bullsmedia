@@ -24,10 +24,14 @@ Docker and Docker Compose.
 git clone https://github.com/sadikavllaj55/bullsmedia.git
 cd bullsmedia
 cp .env.example .env
+# Set DB_PASSWORD, MYSQL_ROOT_PASSWORD, and ADMIN_PASSWORD in .env.
+# Use long, unique values; Docker Compose will refuse to start while they are empty.
 docker compose up -d --build
 ```
 
-Open http://localhost:8080/admin. Login: **admin@bullsmedia.test** / **password**.
+Open http://localhost:8080/admin. Sign in with `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `.env`.
+
+On Ubuntu, place the Google service-account key at `storage/app/google/credentials.json`, then run `sudo ./install.sh`. The installer installs Docker Compose if needed, generates local passwords in `.env`, and starts the services.
 
 ## First Sync
 
@@ -35,6 +39,10 @@ Open http://localhost:8080/admin. Login: **admin@bullsmedia.test** / **password*
 2. Add a tab.
 3. Click **Load headers** and adjust the mappings.
 4. Click **Sync now**.
+
+Keyed syncs upsert rows and do not remove rows deleted from the source sheet. Deactivating a tab or changing its target table also leaves previously imported rows in the old target table. Unkeyed syncs replace all rows belonging to that spreadsheet file in the target table.
+
+The Google credentials directory is mounted read-only into the container. Ensure `credentials.json` is readable by the container's `www-data` user; on a single-user development machine, `chmod 644 storage/app/google/credentials.json` is one option. Avoid making credentials world-readable on shared hosts.
 
 ## Useful Commands
 

@@ -2,9 +2,10 @@
 
 1. Open the [Google Cloud Console](https://console.cloud.google.com/) and select or create a project.
 2. Enable the Google Sheets API for that project.
-3. Create a service account and generate a JSON key. Keep the downloaded key private.
-4. Copy the key to `storage/app/google/credentials.json`, or set `GOOGLE_CREDENTIALS_PATH` to an absolute path in `.env`.
-5. Share each spreadsheet with the service account's `client_email` from the JSON key, with Viewer access.
+3. Open **IAM & Admin → Service Accounts**, select **Create service account**, and finish the account setup.
+4. Open the service account, go to **Keys → Add key → Create new key → JSON**, then download the key. Keep it private and do not commit it.
+5. Open the JSON file and copy the `client_email` value. Share each spreadsheet with that address and grant **Viewer** access.
+6. Copy the JSON key to `storage/app/google/credentials.json`, or set `GOOGLE_CREDENTIALS_PATH` to an absolute path in `.env`.
 
 The application requests the read-only `spreadsheets.readonly` scope. Credential files under `storage/app/google/` are ignored by Git. Never commit the JSON key.
 
