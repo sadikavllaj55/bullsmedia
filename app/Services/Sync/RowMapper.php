@@ -126,28 +126,52 @@ class RowMapper
 
     private function castNumber(string $value, bool $integer): int|float|null
     {
-        $normalizedValue = preg_replace('/[\s\p{Z}\p{Sc},]/u', '', trim($value));
+        $normalizedValue = preg_replace('/[\s\p{Z}\p{Sc}]/u', '', trim($value));
+
+        if ($normalizedValue !== null && str_contains($normalizedValue, ',') && str_contains($normalizedValue, '.')) {
+            $normalizedValue = strrpos($normalizedValue, ',') > strrpos($normalizedValue, '.')
+                ? str_replace(',', '.', str_replace('.', '', $normalizedValue))
+                : str_replace(',', '', $normalizedValue);
+        } elseif ($normalizedValue !== null && str_contains($normalizedValue, ',')) {
+            $normalizedValue = preg_match('/^[+-]?\d{1,3}(?:,\d{3})+$/', $normalizedValue) === 1
+                ? str_replace(',', '', $normalizedValue)
+                : (substr_count($normalizedValue, ',') === 1 ? str_replace(',', '.', $normalizedValue) : null);
+        }
 
         if ($normalizedValue === null || ! is_numeric($normalizedValue)) {
             return null;
         }
 
-        return $integer ? (int) $normalizedValue : (float) $normalizedValue;
+        $number = (float) $normalizedValue;
+
+        if ($integer && floor($number) !== $number) {
+            return null;
+        }
+
+        return $integer ? (int) $number : $number;
     }
 
-    private function castBoolean(mixed $value, string $stringValue): bool
+    private function castBoolean(mixed $value, string $stringValue): ?bool
     {
         if (is_bool($value)) {
             return $value;
         }
 
-        return in_array(mb_strtolower(trim($stringValue)), ['true', 'yes', '1', 'y'], true);
+        return match (mb_strtolower(trim($stringValue))) {
+            'true', 'yes', '1', 'y' => true,
+            'false', 'no', '0', 'n' => false,
+            default => null,
+        };
     }
 
     private function castDate(string $value, string $format): ?string
     {
         try {
-            return Carbon::parse($value)->format($format);
+            $date = is_numeric($value)
+                ? Carbon::createFromTimestampUTC((int) round(((float) $value - 25569) * 86400))
+                : Carbon::parse($value);
+
+            return $date->format($format);
         } catch (Throwable) {
             return null;
         }

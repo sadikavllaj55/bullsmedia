@@ -15,7 +15,10 @@ it('quotes a tab name and returns the fetched values', function (): void {
 
     $values->shouldReceive('get')
         ->once()
-        ->with('spreadsheet-id', "'Quarter''s data'")
+        ->with('spreadsheet-id', "'Quarter''s data'", [
+            'valueRenderOption' => 'UNFORMATTED_VALUE',
+            'dateTimeRenderOption' => 'SERIAL_NUMBER',
+        ])
         ->andReturn($response);
     $response->shouldReceive('getValues')
         ->once()
@@ -37,7 +40,10 @@ it('returns an empty array when the tab has no values', function (): void {
 
     $values->shouldReceive('get')
         ->once()
-        ->with('spreadsheet-id', "'Empty tab'")
+        ->with('spreadsheet-id', "'Empty tab'", [
+            'valueRenderOption' => 'UNFORMATTED_VALUE',
+            'dateTimeRenderOption' => 'SERIAL_NUMBER',
+        ])
         ->andReturn($response);
     $response->shouldReceive('getValues')
         ->once()

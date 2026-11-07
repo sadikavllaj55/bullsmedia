@@ -124,6 +124,84 @@ it('casts values, pads short rows, and skips fully empty rows', function (): voi
         ->toBe([true, false, true, true, true, false]);
 });
 
+it('does not truncate fractional integers or coerce unknown booleans to false', function (): void {
+    $rows = [
+        ['Count', 'Enabled'],
+        ['12.7', 'N/A'],
+    ];
+    $mappings = collect([
+        ColumnMapping::factory()->make([
+            'sheet_tab_id' => 1,
+            'source_column' => 'Count',
+            'target_table' => 'records',
+            'target_column' => 'count',
+            'column_type' => ColumnType::Integer,
+        ]),
+        ColumnMapping::factory()->make([
+            'sheet_tab_id' => 1,
+            'source_column' => 'Enabled',
+            'target_table' => 'records',
+            'target_column' => 'enabled',
+            'column_type' => ColumnType::Boolean,
+        ]),
+    ]);
+
+    expect(app(RowMapper::class)->map($rows, 1, $mappings))
+        ->toBe(['records' => [['count' => null, 'enabled' => null]]]);
+});
+
+it('parses decimal values using either comma or dot decimal separators', function (): void {
+    $rows = [
+        ['European amount', 'US amount'],
+        ['1.234,56', '$1,234.56'],
+    ];
+    $mappings = collect([
+        ColumnMapping::factory()->make([
+            'sheet_tab_id' => 1,
+            'source_column' => 'European amount',
+            'target_table' => 'records',
+            'target_column' => 'european_amount',
+            'column_type' => ColumnType::Decimal,
+        ]),
+        ColumnMapping::factory()->make([
+            'sheet_tab_id' => 1,
+            'source_column' => 'US amount',
+            'target_table' => 'records',
+            'target_column' => 'us_amount',
+            'column_type' => ColumnType::Decimal,
+        ]),
+    ]);
+
+    expect(app(RowMapper::class)->map($rows, 1, $mappings))
+        ->toBe(['records' => [['european_amount' => 1234.56, 'us_amount' => 1234.56]]]);
+});
+
+it('converts Google Sheets date serials to date and datetime values', function (): void {
+    $rows = [
+        ['Date', 'Occurred At'],
+        [46086, 46086.5],
+    ];
+    $mappings = collect([
+        ColumnMapping::factory()->make([
+            'sheet_tab_id' => 1,
+            'source_column' => 'Date',
+            'target_table' => 'records',
+            'target_column' => 'date',
+            'column_type' => ColumnType::Date,
+        ]),
+        ColumnMapping::factory()->make([
+            'sheet_tab_id' => 1,
+            'source_column' => 'Occurred At',
+            'target_table' => 'records',
+            'target_column' => 'occurred_at',
+            'column_type' => ColumnType::DateTime,
+        ]),
+    ]);
+
+    expect(app(RowMapper::class)->map($rows, 1, $mappings))
+        ->toBe(['records' => [['date' => '2026-03-05', 'occurred_at' => '2026-03-05 12:00:00']]]);
+});
+
 it('reports missing source columns and the available headers', function (): void {
     $rows = [
         ['Full Name', 'Email'],

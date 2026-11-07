@@ -9,12 +9,12 @@ use App\Contracts\SpreadsheetReader;
 final class FakeSpreadsheetReader implements SpreadsheetReader
 {
     /**
-     * @param  array<string, array<string, array<int, array<int, string|null>>>>  $tabValues
+     * @param  array<string, array<string, array<int, array<int, mixed>>>>  $tabValues
      */
     public function __construct(private readonly array $tabValues = []) {}
 
     /**
-     * @return array<int, array<int, string|null>>
+     * @return array<int, array<int, mixed>>
      */
     public function getTabValues(string $spreadsheetId, string $tab): array
     {

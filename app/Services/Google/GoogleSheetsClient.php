@@ -14,7 +14,7 @@ final class GoogleSheetsClient implements SpreadsheetReader
     public function __construct(private readonly GoogleSheetsFactory $factory) {}
 
     /**
-     * @return array<int, array<int, string|null>>
+     * @return array<int, array<int, mixed>>
      */
     public function getTabValues(string $spreadsheetId, string $tab): array
     {
@@ -22,7 +22,10 @@ final class GoogleSheetsClient implements SpreadsheetReader
         $sheets = $this->sheets ??= $this->factory->make();
 
         return $sheets->spreadsheets_values
-            ->get($spreadsheetId, $range)
+            ->get($spreadsheetId, $range, [
+                'valueRenderOption' => 'UNFORMATTED_VALUE',
+                'dateTimeRenderOption' => 'SERIAL_NUMBER',
+            ])
             ->getValues() ?? [];
     }
 }
