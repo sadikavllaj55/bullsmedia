@@ -41,6 +41,9 @@ it('creates a sync table with mapped columns and a unique key index', function (
 it('adds missing columns as nullable without losing existing data', function (): void {
     Schema::create('sync_existing', function (Blueprint $blueprint): void {
         $blueprint->id();
+        $blueprint->foreignId('sheet_file_id')->nullable();
+        $blueprint->timestamp('created_at')->nullable();
+        $blueprint->timestamp('updated_at')->nullable();
         $blueprint->string('existing_value');
     });
     DB::table('sync_existing')->insert(['existing_value' => 'preserved']);
@@ -101,20 +104,78 @@ it('removes the sync unique index when mappings no longer have unique keys', fun
     expect(Schema::hasIndex('sync_reconfigured', 'sync_reconfigured_sync_unique', 'unique'))->toBeFalse();
 });
 
+it('rejects a mapping type change until the existing column is explicitly migrated', function (): void {
+    $mapping = (new ColumnMapping)->forceFill([
+        'target_column' => 'external_id',
+        'column_type' => ColumnType::String,
+        'is_unique_key' => false,
+    ]);
+    $schemaManager = app(SchemaManager::class);
+
+    $schemaManager->ensureTable('sync_type_change', collect([$mapping]));
+    $mapping->column_type = ColumnType::Integer;
+
+    expect(fn () => $schemaManager->ensureTable('sync_type_change', collect([$mapping])))
+        ->toThrow(InvalidMappingException::class, 'mapping requests [integer]');
+
+    expect(Schema::getColumnType('sync_type_change', 'external_id'))->toBe('varchar');
+});
+
+it('keeps generated unique index names within the database identifier limit', function (): void {
+    $table = str_repeat('a', 64);
+    $mapping = (new ColumnMapping)->forceFill([
+        'target_column' => 'external_id',
+        'column_type' => ColumnType::String,
+        'is_unique_key' => true,
+    ]);
+
+    app(SchemaManager::class)->ensureTable($table, collect([$mapping]));
+
+    $index = collect(Schema::getIndexes($table))->first(fn (array $index): bool => $index['unique']);
+
+    expect($index['name'])->toHaveLength(64);
+});
+
+it('rejects composite string keys that exceed the MySQL index size limit', function (): void {
+    $mappings = collect(['first_key', 'second_key', 'third_key', 'fourth_key'])
+        ->map(fn (string $column): ColumnMapping => (new ColumnMapping)->forceFill([
+            'target_column' => $column,
+            'column_type' => ColumnType::String,
+            'is_unique_key' => true,
+        ]));
+
+    app(SchemaManager::class)->ensureTable('sync_large_key', $mappings);
+})->throws(InvalidMappingException::class, '3072-byte index limit');
+
 it('rejects protected tables', function (): void {
     app(SchemaManager::class)->ensureTable('users', collect());
 })->throws(InvalidMappingException::class);
+
+it('rejects an existing table that is not managed by the sync service', function (): void {
+    Schema::create('legacy_imports', function (Blueprint $blueprint): void {
+        $blueprint->id();
+        $blueprint->string('value');
+    });
+
+    app(SchemaManager::class)->ensureTable('legacy_imports', collect());
+})->throws(InvalidMappingException::class, 'not a managed sync table');
 
 it('rejects invalid table names', function (): void {
     app(SchemaManager::class)->ensureTable('sync-people', collect());
 })->throws(InvalidMappingException::class);
 
-it('rejects invalid mapped column names', function (): void {
+it('rejects invalid or reserved mapped column names', function (string $column): void {
     $mapping = (new ColumnMapping)->forceFill([
-        'target_column' => 'BadColumn',
+        'target_column' => $column,
         'column_type' => ColumnType::String,
         'is_unique_key' => false,
     ]);
 
     app(SchemaManager::class)->ensureTable('sync_people', collect([$mapping]));
-})->throws(InvalidMappingException::class);
+})->with([
+    'invalid identifier' => 'BadColumn',
+    'id' => 'id',
+    'sheet file id' => 'sheet_file_id',
+    'created timestamp' => 'created_at',
+    'updated timestamp' => 'updated_at',
+])->throws(InvalidMappingException::class);
