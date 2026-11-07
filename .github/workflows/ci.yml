@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: bullsmedia_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --host=127.0.0.1 --user=root --password=root"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: curl, dom, fileinfo, intl, mbstring, openssl, pdo_mysql, pdo_sqlite, tokenizer, xml, zip
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Prepare application environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Check Pint formatting
+        run: ./vendor/bin/pint --test
+
+      - name: Run PHPStan
+        run: composer analyse
+
+      - name: Run Pest on SQLite
+        run: composer test
+
+      - name: Run Pest on MySQL 8.4
+        run: composer test:mysql
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          DB_URL: ""
