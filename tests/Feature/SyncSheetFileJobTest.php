@@ -106,3 +106,17 @@ it('uses the file id for unique dispatch and configured retries', function (): v
         ->and($job->backoff())->toBe([60, 300])
         ->and($job->timeout)->toBe(600);
 });
+
+it('marks a running sync log as failed when the queue job permanently fails', function (): void {
+    $file = SheetFile::factory()->create();
+    $syncLog = $file->syncLogs()->create([
+        'status' => SyncStatus::Running,
+        'started_at' => now(),
+    ]);
+
+    (new SyncSheetFileJob($file))->failed(new RuntimeException('Worker timed out.'));
+
+    expect($syncLog->refresh()->status)->toBe(SyncStatus::Failed)
+        ->and($syncLog->error)->toBe('Worker timed out.')
+        ->and($syncLog->finished_at)->not->toBeNull();
+});

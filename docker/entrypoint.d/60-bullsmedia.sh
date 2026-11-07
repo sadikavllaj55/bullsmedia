@@ -5,6 +5,11 @@ if [ "${BULLSMEDIA_BOOTSTRAP:-false}" != true ] || [ "${SERVERSIDEUP_DEFAULT_COM
     exit 0
 fi
 
+if [ -z "${ADMIN_PASSWORD:-}" ]; then
+    printf '%s\n' 'ADMIN_PASSWORD must be set before the application can start.' >&2
+    exit 1
+fi
+
 cd /var/www/html
 printf '%s\n' 'Waiting for MySQL...'
 php -r '
@@ -38,7 +43,6 @@ exit(empty($environment["APP_KEY"]) ? 0 : 1);
 
 mkdir -p storage/app/google
 php artisan migrate --force --no-interaction
-php artisan db:seed --force --no-interaction
 php artisan tinker --execute='App\Models\User::firstOrCreate(["email" => getenv("ADMIN_EMAIL") ?: "admin@bullsmedia.test"], ["name" => "BullsMedia Admin", "password" => getenv("ADMIN_PASSWORD") ?: "password"]);' --no-interaction
 php artisan storage:link --force --no-interaction
 php artisan filament:optimize --no-interaction
