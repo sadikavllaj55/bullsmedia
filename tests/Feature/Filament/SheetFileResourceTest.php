@@ -71,6 +71,7 @@ it('rejects protected or invalid mapping target tables', function (string $targe
         ->assertHasFormErrors(['mappings.0.target_table']);
 })->with([
     'protected table' => 'users',
+    'framework table' => 'cache_locks',
     'invalid identifier' => 'Sales Orders',
 ]);
 
@@ -96,10 +97,70 @@ it('rejects a text mapping marked as a unique key', function (): void {
         ->assertHasFormErrors(['mappings']);
 });
 
+it('rejects reserved and duplicate target columns', function (array $mappings): void {
+    $file = SheetFile::factory()->create();
+
+    livewire(TabsRelationManager::class, [
+        'ownerRecord' => $file,
+        'pageClass' => EditSheetFile::class,
+    ])
+        ->callAction(TestAction::make(CreateAction::class)->table(), data: [
+            'tab_name' => 'Orders',
+            'header_row' => 1,
+            'is_active' => true,
+            'mappings' => $mappings,
+        ])
+        ->assertHasFormErrors(['mappings']);
+})->with([
+    'reserved column' => [[[
+        'source_column' => 'ID',
+        'target_table' => 'orders',
+        'target_column' => 'id',
+        'column_type' => 'integer',
+        'is_unique_key' => false,
+    ]]],
+    'duplicate target' => [[
+        [
+            'source_column' => 'Order ID',
+            'target_table' => 'orders',
+            'target_column' => 'order_id',
+            'column_type' => 'integer',
+            'is_unique_key' => false,
+        ],
+        [
+            'source_column' => 'External ID',
+            'target_table' => 'orders',
+            'target_column' => 'order_id',
+            'column_type' => 'integer',
+            'is_unique_key' => false,
+        ],
+    ]],
+]);
+
 it('creates the requested target column identifiers from loaded headers', function (string $header, string $targetColumn): void {
     expect(TabsRelationManager::targetColumnFromHeader($header))->toBe($targetColumn);
 })->with([
     'order id' => ['Order ID', 'order_id'],
     'product name' => ['Product Name', 'product_name'],
     'price with symbols' => ['Price ($)', 'price'],
+    'leading digit' => ['1st Price', 'column_1st_price'],
+    'non latin header' => ['中文', 'column'],
 ]);
+
+it('merges new headers without replacing existing mappings or generating duplicate targets', function (): void {
+    $mappings = TabsRelationManager::mergeHeaderMappings([
+        [
+            'source_column' => 'Order ID',
+            'target_table' => 'sales',
+            'target_column' => 'order_key',
+            'column_type' => 'integer',
+            'is_unique_key' => true,
+        ],
+    ], ['Order ID', 'Buyer Name', 'Buyer-Name'], 'sales');
+
+    expect($mappings)->toHaveCount(3)
+        ->and($mappings[0]['target_column'])->toBe('order_key')
+        ->and($mappings[0]['is_unique_key'])->toBeTrue()
+        ->and($mappings[1]['target_column'])->toBe('buyer_name')
+        ->and($mappings[2]['target_column'])->toBe('buyer_name_2');
+});
