@@ -54,6 +54,33 @@ it('creates a sales table and writes renamed columns on the first sync', functio
         ->and($row->updated_at)->not->toBeNull();
 });
 
+it('preserves displayed dates and percentages for string mappings during sync', function (): void {
+    $file = SheetFile::factory()->create(['spreadsheet_id' => 'spreadsheet-formatted-strings']);
+    $tab = SheetTab::factory()->for($file)->create(['tab_name' => 'Metrics']);
+    $tab->columnMappings()->createMany([
+        ['source_column' => 'Date', 'target_table' => 'metrics', 'target_column' => 'date_label', 'column_type' => ColumnType::String, 'is_unique_key' => false],
+        ['source_column' => 'Discount', 'target_table' => 'metrics', 'target_column' => 'discount_label', 'column_type' => ColumnType::String, 'is_unique_key' => false],
+        ['source_column' => 'Date', 'target_table' => 'metrics', 'target_column' => 'date_value', 'column_type' => ColumnType::Date, 'is_unique_key' => false],
+    ]);
+    $this->app->instance(SpreadsheetReader::class, new FakeSpreadsheetReader(
+        [
+            'spreadsheet-formatted-strings' => [
+                'Metrics' => [['Date', 'Discount'], [46086, 0.25]],
+            ],
+        ],
+        [
+            'spreadsheet-formatted-strings' => [
+                'Metrics' => [['Date', 'Discount'], ['03/05/2026', '25%']],
+            ],
+        ],
+    ));
+
+    expect(app(SheetSyncService::class)->sync($file))->toBe(1)
+        ->and(DB::table('metrics')->value('date_label'))->toBe('03/05/2026')
+        ->and(DB::table('metrics')->value('discount_label'))->toBe('25%')
+        ->and(DB::table('metrics')->value('date_value'))->toBe('2026-03-05');
+});
+
 it('upserts changed values without duplicating and scopes keys to the sheet file', function (): void {
     $firstFile = SheetFile::factory()->create(['spreadsheet_id' => 'spreadsheet-first']);
     $secondFile = SheetFile::factory()->create(['spreadsheet_id' => 'spreadsheet-second']);

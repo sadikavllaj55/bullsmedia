@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Sync;
 
 use App\Contracts\SpreadsheetReader;
+use App\Enums\ColumnType;
 use App\Exceptions\InvalidMappingException;
 use App\Exceptions\NothingToSyncException;
 use App\Models\ColumnMapping;
@@ -39,10 +40,20 @@ class SheetSyncService
 
             $hasActiveMappings = true;
 
+            $rawRows = $this->spreadsheetReader->getTabValues($file->spreadsheet_id, $tab->tab_name);
+            $formattedRows = $mappings->contains(fn (ColumnMapping $mapping): bool => in_array(
+                $mapping->column_type,
+                [ColumnType::String, ColumnType::Text],
+                true,
+            ))
+                ? $this->spreadsheetReader->getTabFormattedValues($file->spreadsheet_id, $tab->tab_name)
+                : null;
+
             $mappedRows = $this->rowMapper->map(
-                $this->spreadsheetReader->getTabValues($file->spreadsheet_id, $tab->tab_name),
+                $rawRows,
                 $tab->header_row,
                 $mappings,
+                $formattedRows,
             );
 
             foreach ($mappedRows as $table => $tableRows) {

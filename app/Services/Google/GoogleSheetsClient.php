@@ -18,14 +18,33 @@ final class GoogleSheetsClient implements SpreadsheetReader
      */
     public function getTabValues(string $spreadsheetId, string $tab): array
     {
+        return $this->fetchTabValues($spreadsheetId, $tab, [
+            'valueRenderOption' => 'UNFORMATTED_VALUE',
+            'dateTimeRenderOption' => 'SERIAL_NUMBER',
+        ]);
+    }
+
+    /**
+     * @return array<int, array<int, mixed>>
+     */
+    public function getTabFormattedValues(string $spreadsheetId, string $tab): array
+    {
+        return $this->fetchTabValues($spreadsheetId, $tab, [
+            'valueRenderOption' => 'FORMATTED_VALUE',
+        ]);
+    }
+
+    /**
+     * @param  array<string, string>  $options
+     * @return array<int, array<int, mixed>>
+     */
+    private function fetchTabValues(string $spreadsheetId, string $tab, array $options): array
+    {
         $range = "'".str_replace("'", "''", $tab)."'";
         $sheets = $this->sheets ??= $this->factory->make();
 
         return $sheets->spreadsheets_values
-            ->get($spreadsheetId, $range, [
-                'valueRenderOption' => 'UNFORMATTED_VALUE',
-                'dateTimeRenderOption' => 'SERIAL_NUMBER',
-            ])
+            ->get($spreadsheetId, $range, $options)
             ->getValues() ?? [];
     }
 }

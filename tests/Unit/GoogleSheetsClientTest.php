@@ -57,3 +57,27 @@ it('returns an empty array when the tab has no values', function (): void {
 
     expect($reader->getTabValues('spreadsheet-id', 'Empty tab'))->toBe([]);
 });
+
+it('returns display-formatted values for string mappings', function (): void {
+    $values = Mockery::mock(SpreadsheetsValues::class);
+    $response = Mockery::mock(ValueRange::class);
+
+    $values->shouldReceive('get')
+        ->once()
+        ->with('spreadsheet-id', "'Dates and rates'", [
+            'valueRenderOption' => 'FORMATTED_VALUE',
+        ])
+        ->andReturn($response);
+    $response->shouldReceive('getValues')
+        ->once()
+        ->andReturn([['Date', 'Rate'], ['03/05/2026', '25%']]);
+
+    $sheets = new Sheets(new Client);
+    $sheets->spreadsheets_values = $values;
+
+    $reader = new GoogleSheetsClient(new GoogleSheetsFactory);
+    (new ReflectionProperty($reader, 'sheets'))->setValue($reader, $sheets);
+
+    expect($reader->getTabFormattedValues('spreadsheet-id', 'Dates and rates'))
+        ->toBe([['Date', 'Rate'], ['03/05/2026', '25%']]);
+});

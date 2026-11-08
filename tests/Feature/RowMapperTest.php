@@ -202,6 +202,47 @@ it('converts Google Sheets date serials to date and datetime values', function (
         ->toBe(['records' => [['date' => '2026-03-05', 'occurred_at' => '2026-03-05 12:00:00']]]);
 });
 
+it('uses formatted cells for string mappings and raw cells for typed mappings', function (): void {
+    $rawRows = [
+        ['Start Date', 'Discount', 'Parsed Date'],
+        [46086, 0.25, 46086],
+    ];
+    $formattedRows = [
+        ['Start Date', 'Discount', 'Parsed Date'],
+        ['03/05/2026', '25%', 'Thursday, March 5, 2026'],
+    ];
+    $mappings = collect([
+        ColumnMapping::factory()->make([
+            'sheet_tab_id' => 1,
+            'source_column' => 'Start Date',
+            'target_table' => 'records',
+            'target_column' => 'display_date',
+            'column_type' => ColumnType::String,
+        ]),
+        ColumnMapping::factory()->make([
+            'sheet_tab_id' => 1,
+            'source_column' => 'Discount',
+            'target_table' => 'records',
+            'target_column' => 'discount_label',
+            'column_type' => ColumnType::String,
+        ]),
+        ColumnMapping::factory()->make([
+            'sheet_tab_id' => 1,
+            'source_column' => 'Parsed Date',
+            'target_table' => 'records',
+            'target_column' => 'parsed_date',
+            'column_type' => ColumnType::Date,
+        ]),
+    ]);
+
+    expect(app(RowMapper::class)->map($rawRows, 1, $mappings, $formattedRows))
+        ->toBe(['records' => [[
+            'display_date' => '03/05/2026',
+            'discount_label' => '25%',
+            'parsed_date' => '2026-03-05',
+        ]]]);
+});
+
 it('reports missing source columns and the available headers', function (): void {
     $rows = [
         ['Full Name', 'Email'],

@@ -16,9 +16,10 @@ class RowMapper
     /**
      * @param  array<int, array<int, mixed>>  $rows
      * @param  Collection<int, ColumnMapping>  $mappings
+     * @param  array<int, array<int, mixed>>|null  $formattedRows
      * @return array<string, list<array<string, mixed>>>
      */
-    public function map(array $rows, int $headerRow, Collection $mappings): array
+    public function map(array $rows, int $headerRow, Collection $mappings, ?array $formattedRows = null): array
     {
         $headerIndex = $headerRow - 1;
         $headers = $headerRow > 0 ? array_values($rows[$headerIndex] ?? []) : [];
@@ -52,7 +53,10 @@ class RowMapper
 
         $mappedRows = array_fill_keys(array_keys($mappingsByTable), []);
 
-        foreach (array_slice($rows, $headerRow) as $row) {
+        $dataRows = array_slice($rows, $headerRow);
+        $formattedDataRows = array_slice($formattedRows ?? $rows, $headerRow);
+
+        foreach ($dataRows as $rowIndex => $row) {
             $row = array_values($row);
 
             if ($this->isEmptyRow($row)) {
@@ -67,10 +71,15 @@ class RowMapper
                 foreach ($tableMappings as $mapping) {
                     $sourceColumn = $this->normalizeHeader($mapping->source_column);
                     $sourcePosition = $headerPositions[$sourceColumn];
+                    $value = $row[$sourcePosition] ?? null;
+
+                    if (in_array($mapping->column_type, [ColumnType::String, ColumnType::Text], true)) {
+                        $value = $formattedDataRows[$rowIndex][$sourcePosition] ?? $value;
+                    }
 
                     $mappedRow[$mapping->target_column] = $this->castValue(
                         $mapping->column_type,
-                        $row[$sourcePosition] ?? null
+                        $value,
                     );
                 }
 
