@@ -24,8 +24,8 @@ Docker and Docker Compose.
 git clone https://github.com/sadikavllaj55/bullsmedia.git
 cd bullsmedia
 cp .env.example .env
-# Set DB_PASSWORD, MYSQL_ROOT_PASSWORD, and ADMIN_PASSWORD in .env.
-# Use long, unique values; Docker Compose will refuse to start while they are empty.
+# Set DB_PASSWORD, MYSQL_ROOT_PASSWORD, and ADMIN_PASSWORD in .env before startup.
+# Use long, unique values. Lifecycle commands such as down and logs work without them.
 docker compose up -d --build
 ```
 
