@@ -10,8 +10,7 @@ x-app: &app-service
     DB_DATABASE: bullsmedia
     DB_USERNAME: bullsmedia
     DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
-    DB_URL: ''
-    CACHE_STORE: database
+    CACHE_STORE: file
     SESSION_DRIVER: database
     QUEUE_CONNECTION: database
     DB_QUEUE_RETRY_AFTER: 660
@@ -22,6 +21,7 @@ x-app: &app-service
     SSL_MODE: 'off'
   volumes:
     - ./storage/app/google:/var/www/html/storage/app/google:ro
+    - app_cache:/var/www/html/storage/framework/cache
     - app_logs:/var/www/html/storage/logs
     - app_runtime:/var/www/html/docker/runtime
 
@@ -84,6 +84,7 @@ services:
       disable: true
 
 volumes:
+  app_cache:
   mysql_data:
   app_logs:
   app_runtime:
