@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Contracts\SpreadsheetReader;
 use App\Enums\ColumnType;
+use App\Exceptions\InvalidMappingException;
 use App\Models\SheetFile;
 use App\Models\SheetTab;
 use App\Services\Google\FakeSpreadsheetReader;
@@ -131,7 +132,7 @@ it('writes one tab to multiple target tables', function (): void {
         ->and(DB::table('customers')->value('email'))->toBe('grace@example.com');
 });
 
-it('merges rows with different mappings from multiple tabs targeting the same table', function (): void {
+it('merges mapped columns from multiple tabs sharing a unique key', function (): void {
     $file = SheetFile::factory()->create(['spreadsheet_id' => 'spreadsheet-two-tabs']);
     $northTab = SheetTab::factory()->for($file)->create(['tab_name' => 'North']);
     $southTab = SheetTab::factory()->for($file)->create(['tab_name' => 'South']);
@@ -147,16 +148,63 @@ it('merges rows with different mappings from multiple tabs targeting the same ta
     $this->app->instance(SpreadsheetReader::class, new FakeSpreadsheetReader([
         'spreadsheet-two-tabs' => [
             'North' => [['Order ID', 'North Amount'], ['1', '10.00']],
-            'South' => [['Order ID', 'South Amount'], ['2', '20.00']],
+            'South' => [['Order ID', 'South Amount'], ['1', '20.00']],
         ],
     ]));
 
     expect(app(SheetSyncService::class)->sync($file))->toBe(2)
-        ->and(DB::table('sales')->count())->toBe(2)
-        ->and((float) DB::table('sales')->orderBy('order_id')->first()->north_amount)->toBe(10.0)
-        ->and(DB::table('sales')->orderBy('order_id')->first()->south_amount)->toBeNull()
-        ->and(DB::table('sales')->orderBy('order_id')->skip(1)->first()->north_amount)->toBeNull()
-        ->and((float) DB::table('sales')->orderBy('order_id')->skip(1)->first()->south_amount)->toBe(20.0);
+        ->and(DB::table('sales')->count())->toBe(1)
+        ->and((float) DB::table('sales')->value('north_amount'))->toBe(10.0)
+        ->and((float) DB::table('sales')->value('south_amount'))->toBe(20.0);
+});
+
+it('rejects rows with an empty or invalid unique key before writing', function (): void {
+    $file = SheetFile::factory()->create(['spreadsheet_id' => 'spreadsheet-invalid-key']);
+    $tab = SheetTab::factory()->for($file)->create(['tab_name' => 'Orders']);
+    $tab->columnMappings()->create([
+        'source_column' => 'Order ID',
+        'target_table' => 'sales',
+        'target_column' => 'order_id',
+        'column_type' => ColumnType::Integer,
+        'is_unique_key' => true,
+    ]);
+    $this->app->instance(SpreadsheetReader::class, new FakeSpreadsheetReader([
+        'spreadsheet-invalid-key' => ['Orders' => [['Order ID'], ['A-17']]],
+    ]));
+
+    expect(fn () => app(SheetSyncService::class)->sync($file))
+        ->toThrow(InvalidMappingException::class, 'empty or invalid unique key [order_id]');
+
+    expect(DB::table('sales')->count())->toBe(0);
+});
+
+it('rejects tabs that use different unique keys for the same table', function (): void {
+    $file = SheetFile::factory()->create(['spreadsheet_id' => 'spreadsheet-mixed-keys']);
+    $keyedTab = SheetTab::factory()->for($file)->create(['tab_name' => 'Keyed']);
+    $unkeyedTab = SheetTab::factory()->for($file)->create(['tab_name' => 'Unkeyed']);
+    $keyedTab->columnMappings()->create([
+        'source_column' => 'Order ID',
+        'target_table' => 'sales',
+        'target_column' => 'order_id',
+        'column_type' => ColumnType::Integer,
+        'is_unique_key' => true,
+    ]);
+    $unkeyedTab->columnMappings()->create([
+        'source_column' => 'Buyer',
+        'target_table' => 'sales',
+        'target_column' => 'buyer',
+        'column_type' => ColumnType::String,
+        'is_unique_key' => false,
+    ]);
+    $this->app->instance(SpreadsheetReader::class, new FakeSpreadsheetReader([
+        'spreadsheet-mixed-keys' => [
+            'Keyed' => [['Order ID'], ['1']],
+            'Unkeyed' => [['Buyer'], ['Ada']],
+        ],
+    ]));
+
+    expect(fn () => app(SheetSyncService::class)->sync($file))
+        ->toThrow(InvalidMappingException::class, 'must use the same unique key columns');
 });
 
 it('adds a newly mapped column and fills it on the next sync', function (): void {
